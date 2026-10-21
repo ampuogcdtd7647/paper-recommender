@@ -35,7 +35,7 @@ See [`references/algorithm.md`](references/algorithm.md) for the exact scoring m
 Clone this repository into your Codex skills directory:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/paper-recommender.git \
+git clone https://github.com/ampuogcdtd7647/paper-recommender.git \
   "$HOME/.codex/skills/paper-recommender"
 ```
 

@@ -35,7 +35,7 @@
 把仓库克隆到 Codex skills 目录：
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/paper-recommender.git \
+git clone https://github.com/ampuogcdtd7647/paper-recommender.git \
   "$HOME/.codex/skills/paper-recommender"
 ```
 
