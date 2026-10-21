@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "profile_kind": "paper-recommender/default-v1",
+  "reader": {
+    "goal": "Build long-term research, engineering, product, and career judgment",
+    "language": "auto"
+  },
+  "interests": [
+    {
+      "name": "AI and large language model fundamentals",
+      "topic": "llm",
+      "terms": ["large language model", "LLM", "transformer", "attention", "pretraining", "fine-tuning", "alignment"],
+      "weight": 0.9
+    },
+    {
+      "name": "Training, inference, and systems",
+      "topic": "systems",
+      "terms": ["training system", "inference optimization", "serving", "KV cache", "quantization", "distributed training", "latency", "throughput"],
+      "weight": 0.9
+    },
+    {
+      "name": "Data, evaluation, and benchmarks",
+      "topic": "evaluation",
+      "terms": ["dataset", "evaluation", "benchmark", "data quality", "contamination", "reliability", "human evaluation"],
+      "weight": 0.85
+    },
+    {
+      "name": "Agents, tools, and automation",
+      "topic": "agents",
+      "terms": ["agent", "tool use", "planning", "browser automation", "workflow", "multi-agent system", "agent safety"],
+      "weight": 0.85
+    },
+    {
+      "name": "Applied AI and product engineering",
+      "topic": "product",
+      "terms": ["AI product", "deployment", "monitoring", "observability", "user experience", "cost", "reliability"],
+      "weight": 0.75
+    },
+    {
+      "name": "Research method and reproducibility",
+      "topic": "method",
+      "terms": ["reproducibility", "ablation study", "experiment design", "open science", "research methodology"],
+      "weight": 0.7
+    },
+    {
+      "name": "Career and long-term thinking",
+      "topic": "career",
+      "terms": ["career development", "learning strategy", "decision making", "long-term investment", "knowledge compounding"],
+      "weight": 0.55
+    }
+  ],
+  "projects": [],
+  "preferences": {
+    "recency_half_life_days": 270,
+    "diversity_lambda": 0.65,
+    "max_per_topic": 2,
+    "exclude_seen": true
+  },
+  "weights": {
+    "relevance": 30,
+    "project_fit": 25,
+    "source_quality": 15,
+    "actionability": 12,
+    "recency": 10,
+    "liked_bonus": 8,
+    "disliked_penalty": 10,
+    "seen_penalty": 25,
+    "diversity_penalty": 15
+  },
+  "maintenance": {
+    "profile_character_budget": 24000,
+    "max_discovered_projects": 12,
+    "max_terms_per_project": 14,
+    "max_evidence_files_per_project": 6
+  }
+}

@@ -1,0 +1,18 @@
+# Private runtime data
+profile.json
+history.json
+candidates.json
+ranked.json
+queries.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

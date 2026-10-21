@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "roots": ["."],
+  "max_depth": 3,
+  "lookback_days": 60,
+  "max_projects": 12,
+  "max_files_per_project": 24,
+  "max_file_bytes": 200000,
+  "exclude_dir_names": [
+    ".git", ".hg", ".svn", ".venv", "venv", "node_modules", "__pycache__",
+    "dist", "build", "target", "cache", "tmp", "temp", "coverage"
+  ],
+  "exclude_path_parts": [".env", "secret", "credential", "token", "password", "apikey", "private_key"],
+  "progress_filename_patterns": [
+    "README", "PROJECT_HANDOFF", "HANDOFF", "STATUS", "PROGRESS", "TODO",
+    "ROADMAP", "PLAN", "SUMMARY", "REPORT", "EXECUTION_LOG", "交接", "进展", "状态", "待办", "计划", "总结"
+  ],
+  "supported_extensions": [".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".toml"]
+}

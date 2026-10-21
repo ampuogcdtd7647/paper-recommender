@@ -1,0 +1,38 @@
+{
+  "interests": [
+    {
+      "name": "LLM inference optimization",
+      "terms": [
+        "LLM inference",
+        "KV cache",
+        "quantization",
+        "serving"
+      ],
+      "weight": 1.0
+    }
+  ],
+  "projects": [
+    {
+      "name": "Browser agent reliability",
+      "goal": "Reduce latency and unsafe actions in production browser automation",
+      "summary": "Improves context compression, navigation diagnostics, action safety, and replay evaluation.",
+      "terms": [
+        "browser automation",
+        "agent safety",
+        "context compression",
+        "replay evaluation"
+      ],
+      "priority": "high"
+    }
+  ],
+  "roots": [
+    "~/Documents/example-projects"
+  ],
+  "liked_topics": [
+    "evaluation",
+    "systems engineering"
+  ],
+  "disliked_topics": [
+    "shallow news"
+  ]
+}

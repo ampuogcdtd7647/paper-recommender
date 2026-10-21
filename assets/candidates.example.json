@@ -1,0 +1,26 @@
+[
+  {
+    "title": "Example Efficient LLM Serving Paper",
+    "url": "https://arxiv.org/abs/2401.00001",
+    "abstract": "A system for low-latency large language model serving with cache-aware scheduling and quantization.",
+    "authors": ["Example Author"],
+    "published_at": "2026-01-15",
+    "source": "arXiv",
+    "source_type": "preprint",
+    "venue": "arXiv",
+    "keywords": ["LLM serving", "cache-aware scheduling", "quantization"],
+    "topics": ["inference"],
+    "code_url": "https://github.com/example/repo",
+    "arxiv_id": "2401.00001"
+  },
+  {
+    "title": "Example Agent Safety Evaluation Report",
+    "url": "https://example.org/reports/agent-safety",
+    "abstract": "Defines failure taxonomies and evaluation protocols for autonomous browser agents.",
+    "published_at": "2025-11-02",
+    "source": "Example Official Lab",
+    "source_type": "official_report",
+    "keywords": ["agent safety", "browser automation", "evaluation"],
+    "topics": ["agents", "safety"]
+  }
+]

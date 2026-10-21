@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "reader": {
+    "goal": "Build long-term engineering and research ability",
+    "language": "zh-CN"
+  },
+  "interests": [
+    {
+      "name": "LLM inference optimization",
+      "topic": "inference",
+      "terms": ["LLM inference", "KV cache", "quantization", "speculative decoding", "serving"],
+      "weight": 1.0
+    },
+    {
+      "name": "Agents and tool use",
+      "topic": "agents",
+      "terms": ["agent", "tool use", "planning", "multi-agent", "browser automation"],
+      "weight": 0.9
+    }
+  ],
+  "projects": [
+    {
+      "id": "example-browser-agent",
+      "name": "Browser agent reliability",
+      "goal": "Reduce latency and unsafe actions in production browser automation",
+      "summary": "Improves context compression, navigation diagnostics, action safety, and replay evaluation.",
+      "terms": ["browser automation", "agent safety", "context compression", "CDP", "replay evaluation"],
+      "priority": "high",
+      "weight": 1.0
+    }
+  ],
+  "preferences": {
+    "recency_half_life_days": 270,
+    "diversity_lambda": 0.65,
+    "max_per_topic": 2,
+    "exclude_seen": true,
+    "preferred_sources": ["arxiv.org", "openreview.net", "aclanthology.org", "official engineering blogs"]
+  },
+  "weights": {
+    "relevance": 30,
+    "project_fit": 25,
+    "source_quality": 15,
+    "actionability": 12,
+    "recency": 10,
+    "liked_bonus": 8,
+    "disliked_penalty": 10,
+    "seen_penalty": 25,
+    "diversity_penalty": 15
+  }
+}
