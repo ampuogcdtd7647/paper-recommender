@@ -203,4 +203,4 @@ python3 -m unittest discover -s tests -v
 
 ## License
 
-No license has been chosen yet. Add a license file before publishing if you want others to know what they may legally reuse.
+Released under the [MIT License](LICENSE).

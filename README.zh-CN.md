@@ -203,4 +203,4 @@ python3 -m unittest discover -s tests -v
 
 ## License
 
-当前还没有选择 license。如果你要公开发布，建议先添加 license 文件，让其他用户明确知道可以怎样复用。
+以 [MIT License](LICENSE) 发布。
