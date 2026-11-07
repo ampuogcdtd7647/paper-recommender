@@ -137,6 +137,26 @@ python3 "$HOME/.codex/skills/paper-recommender/scripts/profile_manager.py" \
   --config ~/.codex/paper-recommender/scan.json
 ```
 
+Refresh can also maintain a private project manifest. The manifest stores evidence
+paths, sizes, modification times, and hashes so unchanged projects reuse their
+existing profile entries while new or changed projects are re-extracted:
+
+```bash
+python3 "$HOME/.codex/skills/paper-recommender/scripts/profile_manager.py" \
+  refresh \
+  --profile ~/.codex/paper-recommender/profile.json \
+  --manifest ~/.codex/paper-recommender/project-manifest.json \
+  --config ~/.codex/paper-recommender/scan.json \
+  --write \
+  --audit ~/.codex/paper-recommender/profile-audit.jsonl
+```
+
+`project-manifest.json` is private machine state and should stay outside the
+reusable skill repository. The refresh command reports new, changed, unchanged,
+and stale projects plus `recommendation_needed`, which a scheduler can use before
+starting a paper-search run. See [`references/manifest.md`](references/manifest.md)
+for the schema and refresh behavior.
+
 Preview first. When you want to update the private profile, add `--write` and optionally an audit log:
 
 ```bash
@@ -172,7 +192,7 @@ This is intentionally shallow learning: it updates liked and disliked topics fro
 - The scanner skips common dependency, build, cache, VCS, and temporary directories.
 - Sensitive-looking paths such as `.env`, credentials, tokens, passwords, API keys, and private keys are skipped.
 - Only configured text extensions are read.
-- Private profiles, history, scan configs, and audit logs belong outside the repository.
+- Private profiles, manifests, history, scan configs, and audit logs belong outside the repository.
 - The reusable skill source does not contain user-specific paths.
 - Normal personalization updates a private profile; it does not edit the skill or an automation prompt.
 
@@ -190,8 +210,8 @@ README.md                        English documentation
 README.zh-CN.md                  Chinese documentation
 scripts/recommend.py             Query generation and ranking
 scripts/profile_manager.py       Profile bootstrap and progressive maintenance
-references/                      Formats, algorithm, and maintenance design
-assets/                          Generic and example configurations
+references/                      Formats, manifest, algorithm, and maintenance design
+assets/                          Generic, manifest, and example configurations
 tests/                           Offline integration tests
 ```
 

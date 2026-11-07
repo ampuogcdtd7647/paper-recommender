@@ -9,25 +9,26 @@ Turn scattered search results into a transparent, reproducible recommendation li
 
 ## Workflow
 
-1. **Prepare the profile.** Use an existing profile JSON when available. Otherwise create a private file outside this skill from the generic default—it works with no personalization:
+1. **Refresh authorized project context when configured.** If a private scan config exists, run `profile_manager.py refresh` with the private profile and manifest before building queries. Unchanged projects may be reused from the manifest; new, changed, and stale projects must be reported. Never write project-specific state into this skill's source files.
+2. **Prepare the profile.** Use an existing profile JSON when available. Otherwise create a private file outside this skill from the generic default—it works with no personalization:
    ```bash
    python3 scripts/profile_manager.py init --output ~/.codex/paper-recommender/profile.json
    ```
    Do not place personal project information in the skill source directory.
-2. **Generate search queries.** Run:
+3. **Generate search queries.** Run:
    ```bash
    python3 scripts/recommend.py build-queries --profile PROFILE.json
    ```
    Search the highest-priority queries first. Expand, combine, or drop queries based on result volume; do not treat generated queries as mandatory.
-3. **Collect candidates.** Use available search tools or paper APIs. Save a JSON array or JSON Lines file matching `references/input-output.md`. Include at least title, URL, source type, published date when known, and abstract/snippet. Never invent metadata or URLs.
-4. **Rank candidates.** Run:
+4. **Collect candidates.** Use available search tools or paper APIs. Save a JSON array or JSON Lines file matching `references/input-output.md`. Include at least title, URL, source type, published date when known, and abstract/snippet. Preserve `project_ids` or the originating query when a candidate was found for a specific project. Never invent metadata or URLs.
+5. **Rank candidates.** Run:
    ```bash
    python3 scripts/recommend.py rank --profile PROFILE.json --candidates CANDIDATES.json --history HISTORY.json --top 5
    ```
    Use `--explain` for score components. The result is decision support, not a substitute for reading the source.
-5. **Verify before presenting.** Open or inspect each recommended source enough to confirm its title, venue/source, date, link, and central claim. Mark unverified fields as unverified. Prefer primary pages over aggregator pages.
-6. **Present a useful digest.** Include title, authors/organization, date, direct link, why it matters, the strongest project connection, 3–5 core points, one practical exercise, and limitations. Explain ranking briefly when the user asks.
-7. **Record feedback.** After a recommendation is selected, liked, rejected, or read, update the private history file. The ranker can record selected URLs with `--record-selection`; explicit likes/rejections may be edited in history. Periodically fold this shallow feedback into the profile with `profile_manager.py learn-feedback`.
+6. **Verify before presenting.** Open or inspect each recommended source enough to confirm its title, venue/source, date, link, and central claim. Mark unverified fields as unverified. Prefer primary pages over aggregator pages.
+7. **Present a useful digest.** Include title, authors/organization, date, direct link, why it matters, the strongest project connection, 3–5 core points, one practical exercise, and limitations. Explain ranking briefly when the user asks.
+8. **Record feedback without expanding the preference model.** Keep the existing history states (`selected`, `liked`, `disliked`, `rejected`, `read`) and preserve associated project IDs when available. This version keeps the existing backward-compatible treatment of `selected` in `learn-feedback`; do not add new inferred or project-scoped preference rules until that policy is reviewed.
 
 ## Conversational configuration
 
@@ -81,3 +82,4 @@ Preview first, then add `--write` and an optional `--audit` path. Only roots lis
 - If no high-quality match exists, say so and recommend a search strategy instead of forcing a weak candidate.
 
 For schemas, scoring details, and examples, read `references/input-output.md`, `references/algorithm.md`, and `references/profile-maintenance.md` only when needed.
+For manifest fields and incremental project refresh behavior, read `references/manifest.md`.

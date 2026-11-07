@@ -137,6 +137,23 @@ python3 "$HOME/.codex/skills/paper-recommender/scripts/profile_manager.py" \
   --config ~/.codex/paper-recommender/scan.json
 ```
 
+刷新时可以使用私有项目 manifest。它保存证据文件的路径、大小、修改时间和哈希，
+让未变化的项目复用已有画像，只重新提取新增或变化的项目：
+
+```bash
+python3 "$HOME/.codex/skills/paper-recommender/scripts/profile_manager.py" \
+  refresh \
+  --profile ~/.codex/paper-recommender/profile.json \
+  --manifest ~/.codex/paper-recommender/project-manifest.json \
+  --config ~/.codex/paper-recommender/scan.json \
+  --write \
+  --audit ~/.codex/paper-recommender/profile-audit.jsonl
+```
+
+`project-manifest.json` 是本地机器状态，不应提交到 Skill 源码仓库。刷新命令会输出
+新增、变化、未变化和 stale 项目数量，以及 `recommendation_needed`，调度器可以据此
+决定是否启动论文检索。详细字段见 [`references/manifest.md`](references/manifest.md)。
+
 先预览，确认后才加 `--write` 更新私有画像，也可以同时写入审计日志：
 
 ```bash
@@ -172,7 +189,7 @@ python3 "$HOME/.codex/skills/paper-recommender/scripts/profile_manager.py" \
 - 扫描器会跳过常见依赖、构建、缓存、版本控制和临时目录。
 - `.env`、credential、token、password、API key、private key 等敏感路径会被跳过。
 - 只读取配置允许的文本格式。
-- 私有画像、历史、扫描配置和审计日志应保存在仓库外。
+- 私有画像、项目 manifest、历史、扫描配置和审计日志应保存在仓库外。
 - 可复用 skill 源码不包含用户专属路径。
 - 日常个性化更新的是私有画像，不修改 skill 源码，也不修改自动化任务 prompt。
 
@@ -190,8 +207,8 @@ README.md                        英文文档
 README.zh-CN.md                  中文文档
 scripts/recommend.py             query 生成与推荐排序
 scripts/profile_manager.py       画像初始化与渐进式维护
-references/                      格式、算法和维护设计文档
-assets/                          通用配置与示例配置
+references/                      格式、manifest、算法和维护设计文档
+assets/                          通用、manifest 与示例配置
 tests/                           离线集成测试
 ```
 

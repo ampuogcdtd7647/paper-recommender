@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "updated_at": "2026-11-07T09:00:00+08:00",
+  "projects": {
+    "/Users/example/Documents/projects/browser-agent": {
+      "project_id": "project-0123456789",
+      "root": "/Users/example/Documents/projects/browser-agent",
+      "name": "browser-agent",
+      "fingerprint": "sha256-of-project-evidence",
+      "evidence_files": [
+        {
+          "path": "/Users/example/Documents/projects/browser-agent/README.md",
+          "relative_path": "README.md",
+          "size": 1200,
+          "mtime_ns": 1794000000000000000,
+          "sha256": "sha256-of-file"
+        }
+      ],
+      "active_recently": true,
+      "stale": false,
+      "last_seen_at": "2026-11-07T09:00:00+08:00"
+    }
+  },
+  "summary": {
+    "new_projects": 1,
+    "changed_projects": 0,
+    "unchanged_projects": 0,
+    "stale_projects": 0
+  }
+}

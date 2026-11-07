@@ -4,11 +4,12 @@
 Commands:
   init          Create a usable generic profile.
   init-scan     Create a private, explicit project-scan allowlist.
-  refresh       Discover active local projects and propose/update profile entries.
+  refresh       Discover active local projects and update the private manifest/profile.
   learn-feedback Fold shallow positive/negative reading feedback into the profile.
 
 The scanner is offline, conservative, and deterministic. It does not modify skill
-source files or automation prompts.
+source files or automation prompts. The manifest records evidence fingerprints so
+unchanged projects can be reused without re-extracting their context.
 """
 
 from __future__ import annotations
@@ -71,6 +72,40 @@ def atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
     os.replace(temporary, path)
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def evidence_fingerprint(root: Path, files: Sequence[Path]) -> Tuple[str, List[Dict[str, Any]]]:
+    """Return a stable fingerprint and inspectable metadata for evidence files."""
+    records: List[Dict[str, Any]] = []
+    digest = hashlib.sha256()
+    digest.update(str(root).encode("utf-8"))
+    for path in sorted(files, key=lambda item: str(item)):
+        try:
+            stat = path.stat()
+            relative = str(path.relative_to(root))
+            content_hash = sha256_file(path)
+        except (OSError, PermissionError, ValueError):
+            continue
+        record = {
+            "path": str(path),
+            "relative_path": relative,
+            "size": stat.st_size,
+            "mtime_ns": stat.st_mtime_ns,
+            "sha256": content_hash,
+        }
+        records.append(record)
+        digest.update(relative.encode("utf-8"))
+        digest.update(str(stat.st_size).encode("ascii"))
+        digest.update(content_hash.encode("ascii"))
+    return digest.hexdigest(), records
+
+
 def append_audit(path: Path, event: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     record = {"at": iso_now(), **dict(event)}
@@ -127,7 +162,9 @@ def collect_projects(
     config: Mapping[str, Any],
     max_projects: int,
     lookback_days: int,
-) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    previous_manifest: Optional[Mapping[str, Any]] = None,
+    previous_projects: Optional[Sequence[Mapping[str, Any]]] = None,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any], Dict[str, Any]]:
     exclude_dirs = {str(x) for x in config.get("exclude_dir_names", [])}
     sensitive_parts = [str(x) for x in config.get("exclude_path_parts", [])]
     extensions = {str(x).casefold() for x in config.get("supported_extensions", [".md", ".txt"])}
@@ -139,6 +176,14 @@ def collect_projects(
     raw_projects: List[Dict[str, Any]] = []
     stats: Counter = Counter()
     warnings: List[str] = []
+    manifest_projects = previous_manifest.get("projects", {}) if isinstance(previous_manifest, Mapping) else {}
+    if not isinstance(manifest_projects, Mapping):
+        manifest_projects = {}
+    previous_by_root = {
+        str(item.get("root", "")): item
+        for item in (previous_projects or [])
+        if isinstance(item, Mapping) and item.get("source") == "scan" and item.get("root")
+    }
 
     for root in roots:
         root = root.resolve()
@@ -165,24 +210,39 @@ def collect_projects(
                 continue
             stats["project_candidates"] += 1
             eligible_files: List[Path] = []
-            for filename in filenames:
-                path = current / filename
-                stats["files_seen"] += 1
-                if path.suffix.casefold() not in extensions:
+            # Inspect evidence files below the project root, not only files at
+            # its top level. This captures common layouts such as docs/PLAN.md
+            # and docs/PROJECT_HANDOFF.md while retaining the configured depth
+            # and exclusion boundaries.
+            for evidence_directory, evidence_dirnames, evidence_filenames in os.walk(current):
+                evidence_current = Path(evidence_directory)
+                if dir_depth(current, evidence_current) > max_depth:
+                    evidence_dirnames[:] = []
                     continue
-                if is_sensitive_path(path, sensitive_parts):
-                    stats["sensitive_skipped"] += 1
-                    continue
-                lowered_path = str(path).casefold()
-                if not any(pattern in path.name.casefold() or pattern in lowered_path for pattern in progress_patterns):
-                    continue
-                try:
-                    if path.stat().st_size > max_file_bytes:
-                        stats["oversize_skipped"] += 1
+                evidence_dirnames[:] = sorted(
+                    name for name in evidence_dirnames
+                    if name not in exclude_dirs
+                    and not name.startswith(".")
+                    and not is_sensitive_path(evidence_current / name, sensitive_parts)
+                )
+                for filename in evidence_filenames:
+                    path = evidence_current / filename
+                    stats["files_seen"] += 1
+                    if path.suffix.casefold() not in extensions:
                         continue
-                except OSError:
-                    continue
-                eligible_files.append(path)
+                    if is_sensitive_path(path, sensitive_parts):
+                        stats["sensitive_skipped"] += 1
+                        continue
+                    lowered_path = str(path).casefold()
+                    if not any(pattern in path.name.casefold() or pattern in lowered_path for pattern in progress_patterns):
+                        continue
+                    try:
+                        if path.stat().st_size > max_file_bytes:
+                            stats["oversize_skipped"] += 1
+                            continue
+                    except OSError:
+                        continue
+                    eligible_files.append(path)
             if not eligible_files:
                 continue
             eligible_files.sort(key=lambda p: evidence_score(p, current.name), reverse=True)
@@ -191,10 +251,20 @@ def collect_projects(
                 newest_mtime = max(path.stat().st_mtime for path in chosen_files)
             except OSError:
                 continue
+            fingerprint, file_records = evidence_fingerprint(current, chosen_files)
+            previous_manifest_item = manifest_projects.get(str(current))
+            unchanged = bool(
+                isinstance(previous_manifest_item, Mapping)
+                and previous_manifest_item.get("fingerprint") == fingerprint
+                and str(current) in previous_by_root
+            )
             raw_projects.append({
                 "root": str(current),
                 "name": current.name,
                 "evidence_files": [str(path) for path in chosen_files],
+                "evidence_records": file_records,
+                "fingerprint": fingerprint,
+                "unchanged": unchanged,
                 "newest_mtime": newest_mtime,
                 "active_recently": newest_mtime >= cutoff,
             })
@@ -208,6 +278,17 @@ def collect_projects(
     global_term_counts: Counter = Counter()
     preliminary: List[Dict[str, Any]] = []
     for item in raw_projects:
+        if item["unchanged"]:
+            previous = dict(previous_by_root[item["root"]])
+            preliminary.append({
+                **item,
+                "reused_project": previous,
+                "token_counts": Counter(),
+                "read_count": 0,
+                "text_sample": "",
+            })
+            stats["projects_reused"] += 1
+            continue
         text_parts: List[str] = []
         read_count = 0
         for file_path_string in item["evidence_files"]:
@@ -244,6 +325,13 @@ def collect_projects(
 
     projects: List[Dict[str, Any]] = []
     for item in preliminary:
+        if item.get("reused_project"):
+            reused = dict(item["reused_project"])
+            reused["active"] = bool(item["active_recently"])
+            reused.pop("stale", None)
+            reused["_scan_unchanged"] = True
+            projects.append(reused)
+            continue
         specific_terms: List[str] = []
         for token, count in item["token_counts"].most_common():
             if len(token) < 3 and not re.search(r"[\u3400-\u9fff]", token):
@@ -288,7 +376,24 @@ def collect_projects(
         })
 
     stats_output = {key: stats[key] for key in sorted(stats)}
-    return projects, {"stats": stats_output, "warnings": warnings}
+    manifest = {
+        "version": 1,
+        "updated_at": iso_now(),
+        "projects": {
+            item["root"]: {
+                "project_id": "project-" + hashlib.sha1(item["root"].encode("utf-8")).hexdigest()[:10],
+                "root": item["root"],
+                "name": item["name"],
+                "fingerprint": item["fingerprint"],
+                "evidence_files": item["evidence_records"],
+                "active_recently": bool(item["active_recently"]),
+                "stale": False,
+                "last_seen_at": iso_now(),
+            }
+            for item in raw_projects
+        },
+    }
+    return projects, {"stats": stats_output, "warnings": warnings}, manifest
 
 
 def merge_projects(
@@ -330,6 +435,16 @@ def merge_projects(
     for candidate in discovered:
         existing = old_scan_by_root.get(str(candidate.get("root", "")))
         if existing:
+            if candidate.get("_scan_unchanged"):
+                copied = dict(existing)
+                candidate_active = bool(candidate.get("active", copied.get("active", True)))
+                if bool(copied.get("active", True)) != candidate_active:
+                    copied["active"] = candidate_active
+                    copied["priority"] = "high" if candidate_active else "normal"
+                    copied["weight"] = 0.75 if candidate_active else 0.45
+                    changes.append(f"Updated activity for discovered project: {candidate.get('name')}")
+                merged.append(copied)
+                continue
             old_id = str(existing.get("id", candidate["id"]))
             candidate = {**candidate, "id": old_id}
             if protected_ids.intersection({str(existing.get("manual_replacement_id", old_id))}):
@@ -648,6 +763,8 @@ def command_configure(args: argparse.Namespace) -> int:
 def command_refresh(args: argparse.Namespace) -> int:
     profile_path = Path(args.profile).expanduser()
     profile = load_json(profile_path)
+    manifest_path = Path(args.manifest).expanduser() if args.manifest else profile_path.with_name("project-manifest.json")
+    previous_manifest = load_json(manifest_path) if manifest_path.exists() else {}
     config: Dict[str, Any] = {}
     if args.config:
         config = load_json(Path(args.config).expanduser())
@@ -656,38 +773,96 @@ def command_refresh(args: argparse.Namespace) -> int:
         raise ValueError("No scan roots configured. Use --config or --root.")
     max_projects = int(args.max_projects or config.get("max_projects") or profile.get("maintenance", {}).get("max_discovered_projects", 12))
     lookback_days = int(args.lookback_days or config.get("lookback_days", 60))
-    discovered, discovery_report = collect_projects(roots, config, max_projects, lookback_days)
     old_projects = profile.get("projects", [])
     if not isinstance(old_projects, list):
         raise ValueError("Profile 'projects' must be a list")
+    discovered, discovery_report, refreshed_manifest = collect_projects(
+        roots,
+        config,
+        max_projects,
+        lookback_days,
+        previous_manifest=previous_manifest,
+        previous_projects=old_projects,
+    )
     merged, changes = merge_projects(old_projects, discovered, max_projects)
+    previous_manifest_projects = previous_manifest.get("projects", {}) if isinstance(previous_manifest, Mapping) else {}
+    if not isinstance(previous_manifest_projects, Mapping):
+        previous_manifest_projects = {}
+    refreshed_manifest_projects = refreshed_manifest.get("projects", {})
+    if not isinstance(refreshed_manifest_projects, dict):
+        refreshed_manifest_projects = {}
+    discovered_roots = set(refreshed_manifest_projects)
+    stale_roots = set(previous_manifest_projects) - discovered_roots
+    for root in stale_roots:
+        stale_item = dict(previous_manifest_projects[root])
+        stale_item["active_recently"] = False
+        stale_item["stale"] = True
+        stale_item["stale_at"] = iso_now()
+        refreshed_manifest_projects[root] = stale_item
+    refreshed_manifest["projects"] = refreshed_manifest_projects
+
+    previous_fingerprints = {
+        str(root): str(item.get("fingerprint", ""))
+        for root, item in previous_manifest_projects.items()
+        if isinstance(item, Mapping)
+    }
+    current_fingerprints = {
+        str(root): str(item.get("fingerprint", ""))
+        for root, item in refreshed_manifest_projects.items()
+        if isinstance(item, Mapping) and not item.get("stale")
+    }
+    new_roots = sorted(set(current_fingerprints) - set(previous_fingerprints))
+    changed_roots = sorted(
+        root for root in set(current_fingerprints) & set(previous_fingerprints)
+        if current_fingerprints[root] != previous_fingerprints[root]
+    )
+    refreshed_manifest["summary"] = {
+        "new_projects": len(new_roots),
+        "changed_projects": len(changed_roots),
+        "stale_projects": len(stale_roots),
+        "unchanged_projects": int(discovery_report.get("stats", {}).get("projects_reused", 0)),
+    }
+
+    profile_changed = merged != old_projects
     updated = dict(profile)
-    updated["projects"] = merged
-    updated["updated_at"] = iso_now()
-    updated.setdefault("personalization", {"mode": "progressive"})
-    updated["personalization"]["last_scan_at"] = iso_now()
+    if profile_changed:
+        updated["projects"] = merged
+        updated["updated_at"] = iso_now()
+        updated.setdefault("personalization", {"mode": "progressive"})
+        updated["personalization"]["last_scan_at"] = iso_now()
     budget = int(updated.get("maintenance", {}).get("profile_character_budget", 24000))
     enforce_profile_budget(updated, budget)
     payload = {
         "would_write": str(profile_path),
         "write": bool(args.write),
+        "manifest": str(manifest_path),
+        "profile_updated": profile_changed,
+        "manifest_updated": bool(new_roots or changed_roots or stale_roots or not previous_manifest),
+        "recommendation_needed": bool(new_roots or changed_roots or profile_changed),
         "roots": [str(root) for root in roots],
         "projects": merged,
         "changes": changes,
         "discovery": discovery_report,
+        "summary": refreshed_manifest["summary"],
     }
     if args.write:
-        atomic_write_json(profile_path, updated)
+        if profile_changed:
+            atomic_write_json(profile_path, updated)
+        atomic_write_json(manifest_path, refreshed_manifest)
         if args.audit:
             append_audit(Path(args.audit).expanduser(), {
                 "event": "refresh",
                 "profile": str(profile_path),
+                "manifest": str(manifest_path),
                 "roots": [str(root) for root in roots],
                 "changes": changes,
                 "stats": discovery_report.get("stats", {}),
                 "warnings": discovery_report.get("warnings", []),
+                "summary": refreshed_manifest["summary"],
+                "profile_updated": profile_changed,
             })
-        payload["written"] = str(profile_path)
+        payload["profile_written"] = profile_changed
+        payload["manifest_written"] = True
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 
@@ -789,6 +964,7 @@ def make_parser() -> argparse.ArgumentParser:
 
     refresh = subparsers.add_parser("refresh", help="Discover projects and update the private profile")
     refresh.add_argument("--profile", required=True)
+    refresh.add_argument("--manifest", help="Private project manifest JSON (defaults beside the profile)")
     refresh.add_argument("--config")
     refresh.add_argument("--root", action="append")
     refresh.add_argument("--write", action="store_true")

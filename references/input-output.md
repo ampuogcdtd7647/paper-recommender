@@ -51,7 +51,8 @@ History is private and should normally live outside the repository. Example:
       "title": "Example paper",
       "first_seen_at": "2026-10-22T09:00:00+08:00",
       "selected_at": "2026-10-22T09:00:00+08:00",
-      "feedback": "liked"
+      "feedback": "liked",
+      "project_ids": ["project-browser-agent"]
     }
   ],
   "liked_topics": ["inference optimization"],

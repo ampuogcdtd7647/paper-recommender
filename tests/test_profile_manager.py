@@ -123,6 +123,7 @@ class ProfileManagerTests(unittest.TestCase):
 
             profile = base / "profile.json"
             scan = base / "scan.json"
+            manifest = base / "project-manifest.json"
             audit = base / "audit.jsonl"
             run(PROFILE_MANAGER, "init", "--output", profile)
             run(PROFILE_MANAGER, "init-scan", "--output", scan, "--root", workspace)
@@ -137,6 +138,8 @@ class ProfileManagerTests(unittest.TestCase):
                     "refresh",
                     "--profile",
                     profile,
+                    "--manifest",
+                    manifest,
                     "--config",
                     scan,
                 ).stdout
@@ -147,6 +150,8 @@ class ProfileManagerTests(unittest.TestCase):
                 "refresh",
                 "--profile",
                 profile,
+                    "--manifest",
+                    manifest,
                 "--config",
                 scan,
                 "--write",
@@ -159,6 +164,65 @@ class ProfileManagerTests(unittest.TestCase):
             self.assertTrue(discovered[0]["terms"])
             self.assertNotIn(".env", json.dumps(discovered))
             self.assertTrue(audit.exists())
+            self.assertTrue(manifest.exists())
+            saved_manifest = json.loads(manifest.read_text(encoding="utf-8"))
+            self.assertEqual(1, len(saved_manifest["projects"]))
+            self.assertTrue(saved_manifest["projects"][str(project.resolve())]["fingerprint"])
+
+            second = json.loads(
+                run(
+                    PROFILE_MANAGER,
+                    "refresh",
+                    "--profile",
+                    profile,
+                    "--manifest",
+                    manifest,
+                    "--config",
+                    scan,
+                ).stdout
+            )
+            self.assertEqual(1, second["summary"]["unchanged_projects"])
+            self.assertFalse(second["profile_updated"])
+            self.assertFalse(second["recommendation_needed"])
+
+            (docs / "PROJECT_HANDOFF.md").write_text(
+                "# Current Progress\nNew layout-aware OCR retrieval benchmark.\n",
+                encoding="utf-8",
+            )
+            changed = json.loads(
+                run(
+                    PROFILE_MANAGER,
+                    "refresh",
+                    "--profile",
+                    profile,
+                    "--manifest",
+                    manifest,
+                    "--config",
+                    scan,
+                    "--write",
+                ).stdout
+            )
+            self.assertEqual(1, changed["summary"]["changed_projects"])
+            self.assertTrue(changed["profile_updated"])
+
+            (project / "README.md").unlink()
+            (docs / "PROJECT_HANDOFF.md").unlink()
+            removed = json.loads(
+                run(
+                    PROFILE_MANAGER,
+                    "refresh",
+                    "--profile",
+                    profile,
+                    "--manifest",
+                    manifest,
+                    "--config",
+                    scan,
+                    "--write",
+                ).stdout
+            )
+            self.assertEqual(1, removed["summary"]["stale_projects"])
+            stale_manifest = json.loads(manifest.read_text(encoding="utf-8"))
+            self.assertTrue(stale_manifest["projects"][str(project.resolve())]["stale"])
 
             history = base / "history.json"
             candidates = base / "candidates.json"
@@ -174,6 +238,7 @@ class ProfileManagerTests(unittest.TestCase):
                             "published_at": "2026-10-01",
                             "topics": ["agents", "safety"],
                             "keywords": ["browser automation", "evaluation"],
+                            "project_ids": ["project-browser-agent"],
                         }
                     ]
                 ),
@@ -194,6 +259,8 @@ class ProfileManagerTests(unittest.TestCase):
                 ranked,
                 "--record-selection",
             )
+            saved_history = json.loads(history.read_text(encoding="utf-8"))
+            self.assertEqual(["project-browser-agent"], saved_history["seen"][0]["project_ids"])
             feedback = json.loads(
                 run(
                     PROFILE_MANAGER,
@@ -206,6 +273,43 @@ class ProfileManagerTests(unittest.TestCase):
                 ).stdout
             )
             self.assertIn("browser automation", feedback["liked_topics"])
+
+
+class RecommendTests(unittest.TestCase):
+    def test_project_queries_preserve_project_ids(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            base = Path(temporary_directory)
+            profile = base / "profile.json"
+            profile.write_text(
+                json.dumps(
+                    {
+                        "interests": [{"name": "Agents", "terms": ["agents"], "weight": 1.0}],
+                        "projects": [{
+                            "id": "project-demo",
+                            "name": "Demo retrieval",
+                            "goal": "Improve document retrieval",
+                            "terms": ["document retrieval"],
+                            "priority": "high",
+                            "weight": 1.0,
+                        }],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            output = json.loads(
+                run(
+                    RECOMMEND,
+                    "build-queries",
+                    "--profile",
+                    profile,
+                ).stdout
+            )
+            project_queries = [
+                item for item in output["queries"]
+                if item.get("source_unit") == "project-demo"
+            ]
+            self.assertTrue(project_queries)
+            self.assertTrue(all(item["project_ids"] == ["project-demo"] for item in project_queries))
 
 
 if __name__ == "__main__":

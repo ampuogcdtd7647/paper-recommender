@@ -1,9 +1,12 @@
 # Private runtime data
 profile.json
+project-manifest.json
+scan.json
 history.json
 candidates.json
 ranked.json
 queries.json
+profile-audit.jsonl
 
 # Python
 __pycache__/

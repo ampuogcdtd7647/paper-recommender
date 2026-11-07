@@ -246,12 +246,14 @@ def build_query_objects(profile: Mapping[str, Any], max_queries: int) -> List[Di
                     "purpose": f"Find research relevant to {project['label']}",
                     "priority": 90 + project["weight"] * 8,
                     "source_unit": project["id"],
+                    "project_ids": [project["id"]],
                 })
         generated.append({
             "query": " ".join(short_terms(project, 3)) + " benchmark OR evaluation",
             "purpose": f"Find evaluation methods for {project['label']}",
             "priority": 78 + project["weight"] * 7,
             "source_unit": project["id"],
+            "project_ids": [project["id"]],
         })
         for interest in interests[:4]:
             bridge = (short_terms(project, 1) + short_terms(interest, 1))
@@ -261,6 +263,7 @@ def build_query_objects(profile: Mapping[str, Any], max_queries: int) -> List[Di
                 "priority": 65 + min(project["weight"], interest["weight"]) * 10,
                 "source_unit": project["id"],
                 "bridge_unit": interest["id"],
+                "project_ids": [project["id"]],
             })
 
     for interest in interests:
@@ -736,6 +739,8 @@ def record_selection(
                 "feedback": "selected",
                 "topics": item.get("topics", []),
                 "keywords": item.get("keywords", []),
+                "project_ids": item.get("project_ids", []),
+                "project_matches": item.get("project_matches", []),
                 "source_type": item.get("source_type", "unknown"),
             })
     history_path.write_text(json.dumps(history, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

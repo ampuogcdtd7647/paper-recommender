@@ -7,6 +7,10 @@ The skill separates four layers:
 3. **Private scan config**: an explicit allowlist of roots that may be inspected.
 4. **Private history and audit log**: selected/liked/rejected papers and a record of profile changes.
 
+Project discovery also maintains a private `project-manifest.json` beside the
+profile. The manifest is mechanical scan state (evidence paths and fingerprints),
+while the profile is the derived research context used for recommendation.
+
 This design is inspired by useful properties of agent memory systems such as Hermes: isolated profile state, bounded curated memory, and durable state across sessions. It intentionally adds candidate provenance and explicit file evidence so profile changes can be audited rather than silently treated as authoritative.
 
 ## Zero-personalization start
@@ -72,6 +76,7 @@ Write the updated private profile:
 ```bash
 python3 scripts/profile_manager.py refresh \
   --profile ~/.codex/paper-recommender/profile.json \
+  --manifest ~/.codex/paper-recommender/project-manifest.json \
   --config ~/.codex/paper-recommender/scan.json \
   --write \
   --audit ~/.codex/paper-recommender/profile-audit.jsonl
@@ -87,7 +92,7 @@ The scanner is conservative:
 - It marks stale discovered projects inactive instead of deleting them immediately.
 - It keeps the profile under `maintenance.profile_character_budget`.
 
-A deterministic scanner is only a candidate generator. Codex may inspect the reported evidence and improve names, goals, summaries, and terms, but must not invent facts or bypass the allowlist.
+A deterministic scanner is only a candidate generator. Codex may inspect the reported evidence and improve names, goals, summaries, and terms, but must not invent facts or bypass the allowlist. Read `references/manifest.md` for the manifest schema and the `recommendation_needed` refresh result.
 
 ## Feedback learning
 
@@ -106,7 +111,7 @@ Positive feedback updates `liked_topics`; explicit negative feedback updates `di
 ## Recommended automation split
 
 - **Daily**: generate queries, search, rank, verify, present, record selection.
-- **Weekly**: refresh the profile from authorized project roots and learn from history.
+- **Weekly**: refresh the manifest/profile from authorized project roots and learn from history. Start paper search only when the refresh result or the weekly paper window requires it.
 - **Occasionally**: ask Codex to curate the profile after reviewing the audit log.
 
 Never update the reusable skill source or an automation prompt as part of normal personalization.
