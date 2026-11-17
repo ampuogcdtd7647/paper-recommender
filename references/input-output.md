@@ -40,25 +40,18 @@ Only include metadata actually observed in a source. Use null or omit unknown fi
 
 ## History
 
-History is private and should normally live outside the repository. Example:
+History is private and should normally live outside the repository. It contains:
 
-```json
-{
-  "version": 1,
-  "seen": [
-    {
-      "url": "https://arxiv.org/abs/2401.00000",
-      "title": "Example paper",
-      "first_seen_at": "2026-10-22T09:00:00+08:00",
-      "selected_at": "2026-10-22T09:00:00+08:00",
-      "feedback": "liked",
-      "project_ids": ["project-browser-agent"]
-    }
-  ],
-  "liked_topics": ["inference optimization"],
-  "disliked_topics": ["shallow news"]
-}
-```
+- `seen`: presented items for deduplication; new entries use `feedback: "shown"`.
+- `recommendations`: presentation IDs, stable paper IDs, conversation IDs, and
+  frozen topics, keywords, project IDs/matches for grounding later replies.
+- `feedback_events`: sourced per-message decisions, including follow-ups, explicit
+  interest/disinterest, neutral actions and retractions.
+- `liked_topics` / `disliked_topics`: optional explicit manual global preferences.
+
+See [conversation-feedback.md](conversation-feedback.md) for the decision schema,
+commands, scope, replay rules, and legacy migration behavior. The profile stores
+`feedback_preferences` as a derived snapshot; it does not rewrite project facts.
 
 ## Rank output
 
@@ -70,4 +63,4 @@ The output is a JSON object with:
 - `duplicates_removed`: duplicates found before ranking
 - `warnings`: validation problems
 
-Each ranked item includes the original candidate fields plus `rank`, `score`, `score_breakdown`, `matched_terms`, `project_matches`, `selection_note`, and `recommendation_reason`. With `--explain`, score components and evidence are especially explicit.
+Selected items also include `paper_id` and `recommendation_id`. Each ranked item includes the original candidate fields plus `rank`, `score`, `score_breakdown`, `matched_terms`, `project_matches`, `selection_note`, and `recommendation_reason`. With `--explain`, score components and evidence are especially explicit.

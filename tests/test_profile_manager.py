@@ -258,6 +258,8 @@ class ProfileManagerTests(unittest.TestCase):
                 "--output",
                 ranked,
                 "--record-selection",
+                "--conversation-id",
+                "test-chat",
             )
             saved_history = json.loads(history.read_text(encoding="utf-8"))
             self.assertEqual(["project-browser-agent"], saved_history["seen"][0]["project_ids"])
@@ -272,7 +274,9 @@ class ProfileManagerTests(unittest.TestCase):
                     "--write",
                 ).stdout
             )
-            self.assertIn("browser automation", feedback["liked_topics"])
+            self.assertEqual([], feedback["liked_topics"])
+            self.assertEqual([], feedback["feedback_preferences"])
+            self.assertEqual("shown", saved_history["seen"][0]["feedback"])
 
 
 class RecommendTests(unittest.TestCase):

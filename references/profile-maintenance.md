@@ -5,7 +5,7 @@ The skill separates four layers:
 1. **Reusable skill source**: `SKILL.md`, scripts, examples, and documentation. It is versioned and should not contain user-specific state.
 2. **Private profile**: user interests and project context. Start from the generic default and evolve it gradually.
 3. **Private scan config**: an explicit allowlist of roots that may be inspected.
-4. **Private history and audit log**: selected/liked/rejected papers and a record of profile changes.
+4. **Private history and audit log**: shown papers, sourced conversation events and a record of profile changes.
 
 Project discovery also maintains a private `project-manifest.json` beside the
 profile. The manifest is mechanical scan state (evidence paths and fingerprints),
@@ -96,7 +96,7 @@ A deterministic scanner is only a candidate generator. Codex may inspect the rep
 
 ## Feedback learning
 
-When `recommend.py rank --record-selection` is used, selected papers enter history with topics and keywords. To fold feedback into the profile without manual editing:
+Register presented papers with `recommend.py record-shown`. On follow-up turns the agent extracts supported signals and calls `feedback.py` as described in [conversation-feedback.md](conversation-feedback.md). To rebuild the derived preference snapshot:
 
 ```bash
 python3 scripts/profile_manager.py learn-feedback \
@@ -106,7 +106,7 @@ python3 scripts/profile_manager.py learn-feedback \
   --audit ~/.codex/paper-recommender/profile-audit.jsonl
 ```
 
-Positive feedback updates `liked_topics`; explicit negative feedback updates `disliked_topics`. Existing manual preferences are retained. This is intentionally shallow: it avoids turning a few clicks into a opaque identity model.
+The command rebuilds `feedback_preferences` from active events, so retractions and corrections do not leave accumulated topic pollution. Scanned projects remain unchanged. Manual topic lists are retained; old unproven learned topic lists are archived as `legacy_feedback_topics`, not silently treated as likes. Ranking with history derives preferences directly from events; without history it uses the last profile snapshot.
 
 ## Recommended automation split
 

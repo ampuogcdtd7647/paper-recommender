@@ -1,6 +1,6 @@
 ---
 name: paper-recommender
-description: Recommend papers or technical readings for a personalized research digest. Use when the user asks to recommend papers, articles, reports, or reading lists, especially with project context, feedback, scheduled publication, or search-based candidate ranking.
+description: Recommend papers or technical readings for a personalized research digest. Use when the user asks to recommend papers, articles, reports, or reading lists, especially with project context, feedback, scheduled publication, or search-based candidate ranking. Also use for follow-up discussion or interest feedback about previously recommended papers.
 ---
 
 # Paper Recommender
@@ -28,7 +28,8 @@ Turn scattered search results into a transparent, reproducible recommendation li
    Use `--explain` for score components. The result is decision support, not a substitute for reading the source.
 6. **Verify before presenting.** Open or inspect each recommended source enough to confirm its title, venue/source, date, link, and central claim. Mark unverified fields as unverified. Prefer primary pages over aggregator pages.
 7. **Present a useful digest.** Include title, authors/organization, date, direct link, why it matters, the strongest project connection, 3–5 core points, one practical exercise, and limitations. Explain ranking briefly when the user asks.
-8. **Record feedback without expanding the preference model.** Keep the existing history states (`selected`, `liked`, `disliked`, `rejected`, `read`) and preserve associated project IDs when available. This version keeps the existing backward-compatible treatment of `selected` in `learn-feedback`; do not add new inferred or project-scoped preference rules until that policy is reviewed.
+8. **Capture conversational interest.** Read `references/conversation-feedback.md` when presenting recommendations or handling their follow-up messages. Register presented papers with `record-shown` and a stable conversation ID. Sustained substantive follow-ups are the primary implicit signal; explicit interest/disinterest is independent, stronger evidence. Two distinct user turns about the same paper in the same chat qualify by default. Record quoted user evidence through `scripts/feedback.py`; system selections, silence, and repeated clarification caused by poor answers do not imply preference. Explicit feedback overrides implicit engagement. Keep events private and separate from scanned project facts.
+
 
 ## Conversational configuration
 

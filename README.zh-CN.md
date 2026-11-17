@@ -10,7 +10,7 @@
 - 根据长期兴趣和当前项目生成结构化搜索 query。
 - 推荐论文、报告、工程实践文章、数据集和教程。
 - 使用透明打分，而不是无法解释的“AI 觉得好”。
-- 从用户选择或拒绝的材料中学习偏好。
+- 从持续追问和明确表达的感兴趣／不感兴趣中学习偏好。
 - 可选开启本地项目扫描，但必须使用明确的文件夹授权列表。
 - 将可复用 skill 源码与用户私有状态分离。
 - 画像更新可以写入审计日志，方便追踪变化原因。
@@ -169,7 +169,7 @@ python3 "$HOME/.codex/skills/paper-recommender/scripts/profile_manager.py" \
 
 ### 从阅读反馈学习
 
-排序时使用 `--record-selection`，被选中的论文会写入私有 history。之后可以把这些反馈合并进画像：
+先使用 `recommend.py record-shown --ranked ranked.json --history HISTORY.json --conversation-id CHAT_ID` 登记实际展示的论文。后续对话由 agent 按[对话反馈规则](references/conversation-feedback.md)理解回复并记录用户原话。同一聊天对同一论文有两轮有效追问即可形成隐式兴趣；明确反馈优先于推断。可以将事件重算为私有偏好快照：
 
 ```bash
 python3 "$HOME/.codex/skills/paper-recommender/scripts/profile_manager.py" \
@@ -180,7 +180,7 @@ python3 "$HOME/.codex/skills/paper-recommender/scripts/profile_manager.py" \
   --audit ~/.codex/paper-recommender/profile-audit.jsonl
 ```
 
-这里刻意采用浅层学习：只根据明确的历史记录更新喜欢和不喜欢的话题，不构建不透明的用户模型。
+系统选中、没有回复均不代表偏好。反馈默认限制在论文或关联项目；全局兴趣需要用户明确表达。脚本负责校验结构化判断，不会自行监视聊天或理解自然语言。兼容参数 `--record-selection` 现记录为 `shown`，并要求提供 `--conversation-id`。
 
 ## 隐私与安全边界
 

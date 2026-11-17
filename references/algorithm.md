@@ -26,7 +26,7 @@ The default total score is based on these ranges:
 - **Source quality, 0–15:** source type, peer-reviewed venue, citation evidence, and official authorship. Official engineering writeups can score well for practical purposes, but are not represented as peer review.
 - **Actionability, 0–12:** code, datasets, benchmarks, evaluation protocols, system design, deployment details, tutorials, or concrete practices.
 - **Recency, 0–10:** exponential decay using `recency_half_life_days`. A classic paper can still win through relevance, quality, and actionability.
-- **Feedback, -10 to +8:** liked topics/terms increase the score; disliked topics/terms decrease it.
+- **Feedback, -10 to +8:** explicit manual preferences and scoped conversational evidence adjust the score. Two substantive follow-ups in one chat create implicit interest (strength 0.35); explicit interest/disinterest has strength +1/-1. Implicit signals have a 90-day half-life; explicit ones 180 days. One paper contributes at most once, and the total remains bounded. These are initial heuristics, not calibrated probabilities. See `conversation-feedback.md`.
 - **Seen penalty, default -25:** avoids repeating an item already present in history. `--exclude-seen` removes it instead.
 - **Diversity adjustment, 0 to `-diversity_lambda * 15`:** during final selection, similarity to an already selected item is penalized in the MMR style.
 

@@ -10,7 +10,7 @@ A reusable, open-source Codex skill for personalized paper and technical-reading
 - Generates structured search queries from long-term interests and active projects.
 - Ranks papers, reports, engineering posts, datasets, and tutorials.
 - Uses transparent scoring rather than an opaque “AI picked this” result.
-- Learns from selected or rejected readings.
+- Learns from sustained follow-up discussion and explicit interest/disinterest.
 - Optionally discovers active local projects through an explicit folder allowlist.
 - Keeps reusable skill source separate from private user state.
 - Produces an auditable record when the private profile changes.
@@ -172,7 +172,7 @@ The scanner stores project roots, evidence paths, modification times, and extrac
 
 ### Learn from reading feedback
 
-When ranking includes `--record-selection`, selected papers are written to private history. Fold those signals into the profile:
+Register verified recommendations using `recommend.py record-shown --ranked ranked.json --history HISTORY.json --conversation-id CHAT_ID`. During subsequent discussion, the agent follows [the conversational feedback rules](references/conversation-feedback.md) and records quoted user evidence. Two substantive follow-ups about one paper in one chat establish implicit interest; explicit feedback overrides that inference. Rebuild the preference snapshot with:
 
 ```bash
 python3 "$HOME/.codex/skills/paper-recommender/scripts/profile_manager.py" \
@@ -183,7 +183,7 @@ python3 "$HOME/.codex/skills/paper-recommender/scripts/profile_manager.py" \
   --audit ~/.codex/paper-recommender/profile-audit.jsonl
 ```
 
-This is intentionally shallow learning: it updates liked and disliked topics from explicit history records rather than constructing an opaque user model.
+System selections and silence are neutral. Feedback is scoped to the paper or its project; global preferences require explicit user wording. The offline scripts validate structured agent judgments; they do not monitor chats or classify natural language by themselves. Legacy `--record-selection` now records `shown` and requires `--conversation-id`.
 
 ## Privacy and safety boundaries
 

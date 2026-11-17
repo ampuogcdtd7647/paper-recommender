@@ -875,56 +875,45 @@ def command_learn_feedback(args: argparse.Namespace) -> int:
     seen = history.get("seen", [])
     if not isinstance(seen, list):
         raise ValueError("History 'seen' must be a list")
-    positive: List[str] = []
-    negative: List[str] = []
-    from recommend import extract_tokens
-    for item in seen:
-        if not isinstance(item, dict):
-            continue
-        feedback = str(item.get("feedback", "selected")).casefold()
-        signals: List[str] = []
-        for key in ("topics", "keywords"):
-            values = item.get(key, [])
-            if isinstance(values, list):
-                signals.extend(str(value) for value in values if value)
-        if not signals and item.get("title") and feedback in {"liked", "selected"}:
-            # Use only the most salient title tokens as a weak fallback.
-            tokens = [token for token in extract_tokens(item.get("title")) if len(token) >= 3]
-            signals.extend(tokens[:5])
-        target = positive if feedback in {"liked", "selected"} else negative if feedback in {"disliked", "rejected"} else None
-        if target is not None:
-            target.extend(signal for signal in signals if signal not in target)
-
-    existing_positive = list(profile.get("liked_topics", []))
-    existing_negative = list(profile.get("disliked_topics", []))
-    # History is the source of truth for learned topics, while manual entries remain.
-    manual_positive = set(str(x) for x in profile.get("manual_liked_topics", []))
-    manual_negative = set(str(x) for x in profile.get("manual_disliked_topics", []))
-    liked = list(dict.fromkeys(existing_positive + positive[:30]))
-    disliked = list(dict.fromkeys(existing_negative + negative[:30]))
-    if manual_positive:
-        liked = [value for value in liked if value in manual_positive] + [value for value in liked if value not in manual_positive]
-    if manual_negative:
-        disliked = [value for value in disliked if value in manual_negative] + [value for value in disliked if value not in manual_negative]
-
+    from feedback import derive_preferences
     updated = dict(profile)
-    updated["liked_topics"] = liked[:30]
-    updated["disliked_topics"] = disliked[:30]
+    # Recompute from evidence on every pass so corrections/retractions can remove
+    # learned preferences. Do not union with old auto-learned topic lists.
+    updated["feedback_preferences"] = derive_preferences(history)
+    updated["feedback_policy_version"] = 1
+    updated["liked_topics"] = list(profile.get("manual_liked_topics", []))
+    updated["disliked_topics"] = list(profile.get("manual_disliked_topics", []))
+    if "legacy_feedback_topics" not in updated:
+        updated["legacy_feedback_topics"] = {
+            "liked_topics": profile.get("liked_topics", []),
+            "disliked_topics": profile.get("disliked_topics", []),
+        }
     updated["updated_at"] = iso_now()
     updated.setdefault("personalization", {})["last_feedback_learning_at"] = iso_now()
     budget = int(updated.get("maintenance", {}).get("profile_character_budget", 24000))
-    enforce_profile_budget(updated, budget)
+    # Feedback growth must not evict or mutate scanned project facts. Keep the
+    # newest derived entries within the budget; full evidence stays in history.
+    updated["feedback_preferences"].sort(key=lambda p: p["updated_at"], reverse=True)
+    omitted = 0
+    while updated["feedback_preferences"] and len(json.dumps(updated, ensure_ascii=False)) > budget:
+        updated["feedback_preferences"].pop()
+        omitted += 1
+    if len(json.dumps(updated, ensure_ascii=False)) > budget:
+        raise ValueError("Profile already exceeds its budget without feedback; curate it before learning")
     payload = {
         "would_write": str(profile_path),
         "write": bool(args.write),
         "liked_topics": updated["liked_topics"],
         "disliked_topics": updated["disliked_topics"],
+        "feedback_preferences": updated["feedback_preferences"],
+        "snapshot_entries_omitted": omitted,
     }
     if args.write:
         atomic_write_json(profile_path, updated)
         if args.audit:
             append_audit(Path(args.audit).expanduser(), {
                 "event": "learn-feedback",
+                "feedback_preferences": updated["feedback_preferences"],
                 "profile": str(profile_path),
                 "history": str(history_path),
                 "liked_topics": updated["liked_topics"],

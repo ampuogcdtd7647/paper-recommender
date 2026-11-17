@@ -15,16 +15,20 @@ Python 3.9+ is required.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
 import sys
 import unicodedata
 import urllib.parse
+import uuid
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Set, Tuple
+
+from feedback import atomic_write, derive_preferences
 
 
 ALIASES = {
@@ -164,6 +168,52 @@ def normalize_doi(doi: str) -> str:
 
 def normalize_title(title: str) -> str:
     return re.sub(r"[\W_]+", " ", normalize_text(title)).strip()
+
+
+def paper_identity(candidate: Mapping[str, Any]) -> str:
+    if candidate.get("doi"):
+        key = normalize_doi(str(candidate["doi"]))
+    elif candidate.get("arxiv_id"):
+        key = "arxiv:" + re.sub(r"v\d+$", "", str(candidate["arxiv_id"]).casefold())
+    else:
+        key = normalize_url(str(candidate.get("url", "")))
+    return "paper-" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:24]
+
+
+def conversation_feedback_score(profile, memories, candidate, candidate_text, project_matches):
+    """A bounded, decaying bonus. Broad feedback requires scoped paper evidence."""
+    current_projects = {str(p["id"]) for p in profile.get("projects", [])
+                        if p.get("id") and p.get("active", True) and not p.get("stale")}
+    applicable = (set(candidate.get("project_ids", [])) | {
+        m["project_id"] for m in project_matches if m["fraction"] >= 0.15 and m["matched_terms"]
+    }) & current_projects
+    contributions = {}
+    evidence = []
+    for memory in memories:
+        scope = memory["scope"]
+        if scope == "project" and memory.get("project_id") not in applicable:
+            continue
+        if scope == "paper":
+            if memory["paper_id"] != paper_identity(candidate):
+                continue
+            match = 1.0
+        else:
+            terms = memory.get("terms", [])
+            match = sum(bool(exact_phrase_hits(candidate_text, [t])) for t in terms) / max(1, len(terms))
+        if not match:
+            continue
+        at = parse_datetime(memory.get("updated_at"))
+        age = max(0.0, (datetime.now(timezone.utc) - at).total_seconds() / 86400) if at else 0.0
+        half_life = 90 if memory["kind"] == "implicit" else 180
+        strength = memory["strength"] * math.pow(0.5, age / half_life) * match
+        scale = weight(profile, "liked_bonus", 8) if strength > 0 else weight(profile, "disliked_penalty", 10)
+        # One paper cannot reinforce the same recommendation through several scopes.
+        key = memory["paper_id"]
+        contribution = strength * scale
+        if abs(contribution) > abs(contributions.get(key, 0)):
+            contributions[key] = contribution
+        evidence.append(f"{memory['kind']}:{scope}:{memory['paper_id']}")
+    return sum(contributions.values()), evidence
 
 
 def clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
@@ -511,8 +561,11 @@ def score_candidates(
                 if key:
                     seen_titles[key] = item
 
-    liked_topics = [str(x) for x in (history or {}).get("liked_topics", [])]
-    disliked_topics = [str(x) for x in (history or {}).get("disliked_topics", [])]
+    # Only explicit manual lists are global. Old auto-learned profile lists may
+    # contain system selections, so they are not used as preference evidence.
+    liked_topics = list(dict.fromkeys(profile.get("manual_liked_topics", []) + (history or {}).get("liked_topics", [])))
+    disliked_topics = list(dict.fromkeys(profile.get("manual_disliked_topics", []) + (history or {}).get("disliked_topics", [])))
+    memories = derive_preferences(history) if history is not None else profile.get("feedback_preferences", [])
     warnings: List[str] = []
     scored: List[Dict[str, Any]] = []
     relevance_weight = weight(profile, "relevance", 30)
@@ -610,6 +663,10 @@ def score_candidates(
             if topic and normalize_text(topic) in candidate_text:
                 feedback_score -= disliked_penalty / max(1, len(disliked_topics))
                 feedback_evidence.append(f"disliked:{topic}")
+        conversation_score, conversation_evidence = conversation_feedback_score(
+            profile, memories, candidate, candidate_text, project_matches)
+        feedback_score += conversation_score
+        feedback_evidence.extend(conversation_evidence)
         feedback_score = max(-disliked_penalty, min(liked_bonus, feedback_score))
 
         seen_item: Optional[Dict[str, Any]] = None
@@ -712,6 +769,7 @@ def select_diverse(
 def record_selection(
     history_path: Path,
     selected: Sequence[Mapping[str, Any]],
+    conversation_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     history: Dict[str, Any]
     if history_path.exists():
@@ -725,6 +783,7 @@ def record_selection(
     if not isinstance(seen, list):
         raise ValueError("History 'seen' must be a list")
     now = iso_now()
+    recommendations = history.setdefault("recommendations", [])
     for item in selected:
         if not item.get("url"):
             continue
@@ -736,14 +795,26 @@ def record_selection(
                 "title": item.get("title"),
                 "first_seen_at": now,
                 "selected_at": now,
-                "feedback": "selected",
+                "feedback": "shown",
                 "topics": item.get("topics", []),
                 "keywords": item.get("keywords", []),
                 "project_ids": item.get("project_ids", []),
                 "project_matches": item.get("project_matches", []),
                 "source_type": item.get("source_type", "unknown"),
             })
-    history_path.write_text(json.dumps(history, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        recommendation_id = item.get("recommendation_id") or "rec-" + uuid.uuid4().hex
+        registered = next((r for r in recommendations if r["recommendation_id"] == recommendation_id), None)
+        if registered:
+            if registered.get("conversation_id") != conversation_id or registered["paper_id"] != paper_identity(item):
+                raise ValueError("recommendation_id is already registered in a different context")
+            continue
+        recommendations.append({
+            "recommendation_id": recommendation_id, "paper_id": paper_identity(item),
+            "conversation_id": conversation_id, "shown_at": now,
+            **{k: item.get(k, []) for k in ("topics", "keywords", "project_ids", "project_matches")},
+            "title": item.get("title"), "url": item.get("url"),
+        })
+    atomic_write(history_path, history)
     return history
 
 
@@ -764,6 +835,8 @@ def command_build_queries(args: argparse.Namespace) -> int:
 
 
 def command_rank(args: argparse.Namespace) -> int:
+    if args.record_selection and (not args.history or not args.conversation_id):
+        raise ValueError("--record-selection requires --history and --conversation-id")
     profile_path = Path(args.profile)
     candidates_path = Path(args.candidates)
     profile = load_json(profile_path)
@@ -781,6 +854,9 @@ def command_rank(args: argparse.Namespace) -> int:
     exclude_seen = args.exclude_seen or bool(preference(profile, "exclude_seen", False))
     scored, warnings = score_candidates(profile, unique, history, args.explain, exclude_seen)
     selected = select_diverse(scored, profile, args.top)
+    for item in selected:
+        item["paper_id"] = paper_identity(item)
+        item["recommendation_id"] = "rec-" + uuid.uuid4().hex
     selected_urls = {normalize_url(str(x.get("url", ""))) for x in selected}
     not_selected = [item for item in scored if normalize_url(str(item.get("url", ""))) not in selected_urls]
 
@@ -796,9 +872,17 @@ def command_rank(args: argparse.Namespace) -> int:
     write_output(args.output, payload)
 
     if args.record_selection:
-        if not args.history:
-            raise ValueError("--record-selection requires --history")
-        record_selection(Path(args.history), selected)
+        record_selection(Path(args.history), selected, args.conversation_id)
+    return 0
+
+
+def command_record_shown(args: argparse.Namespace) -> int:
+    ranked = load_json(Path(args.ranked))
+    items = ranked.get("selected", [])
+    if any(not item.get("recommendation_id") for item in items):
+        raise ValueError("Rank output has no recommendation IDs; rerun rank")
+    history = record_selection(Path(args.history), items, args.conversation_id)
+    write_output(None, {"recorded": len(items), "recommendations": len(history["recommendations"])})
     return 0
 
 
@@ -820,8 +904,15 @@ def make_parser() -> argparse.ArgumentParser:
     rank.add_argument("--output", type=Path, help="Write JSON output to this file")
     rank.add_argument("--explain", action="store_true", help="Include detailed score evidence")
     rank.add_argument("--exclude-seen", action="store_true", help="Remove already-seen items")
-    rank.add_argument("--record-selection", action="store_true", help="Append selected items to history (requires --history)")
+    rank.add_argument("--record-selection", action="store_true", help="Record items as shown (requires --history and --conversation-id)")
+    rank.add_argument("--conversation-id", help="Chat ID for the intended presentation")
     rank.set_defaults(handler=command_rank)
+
+    shown = subparsers.add_parser("record-shown", help="Register verified, presented results for conversational feedback")
+    shown.add_argument("--history", required=True)
+    shown.add_argument("--ranked", required=True)
+    shown.add_argument("--conversation-id", required=True)
+    shown.set_defaults(handler=command_record_shown)
     return parser
 
 
